@@ -2,8 +2,8 @@ library(shiny)
 library(shinyjs)
 library(googlesheets4)
 
-caminho_secreto <- "rotaspeufba.json"
-gs4_auth(path = caminho_secreto)
+caminho_ <- "rotaspeufba.json"
+gs4_auth(path = caminho_)
 URL_PLANILHA <- "16_UyvTv7CYSLYQs-0ZnoB1xuHK9oZ7s8vQvRnc07yWc"
 
 #interface
