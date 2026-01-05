@@ -1,23 +1,39 @@
 library(shiny)
 library(shinyjs)
 library(googlesheets4)
+library(leaflet)
+library(mapview)
+library(leaflet.extras)
+library(sf)    
+library(dplyr) 
 
-caminho_ <- "rotaspeufba.json"
-gs4_auth(path = caminho_)
+if(file.exists("rotaspeufba.json")) {
+  gs4_auth(path = "rotaspeufba.json")
+}
+
 URL_PLANILHA <- "16_UyvTv7CYSLYQs-0ZnoB1xuHK9oZ7s8vQvRnc07yWc"
 
-#interface
 ui <- fluidPage(
   useShinyjs(),
-  titlePanel("Validação de Rotas a Pé - UFBA"),
+  tags$head(tags$style(HTML("
+    .info-box { background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 5px solid #007bff; }
+    .warn-box { border-left-color: #ffc107; }
+  "))),
+  
+  titlePanel("Rotas UFBA - Caminhabilidade"),
   
   sidebarLayout(
     sidebarPanel(
-      h4("Seleção de Rota"),
-      selectizeInput("origem", "Origem:", choices = pontos_r5r$name),
+      h4("Planejar Caminhada"),
+      
+      div(style="display: flex; align-items: flex-end;",
+          div(style="flex-grow: 1;", selectizeInput("origem", "Origem:", choices = pontos_r5r$name)),
+          div(style="padding-bottom: 15px; padding-left: 5px;", 
+              actionButton("btn_inverter", "", icon = icon("exchange-alt"), title = "Inverter sentidos"))
+      ),
       selectizeInput("destino", "Destino:", choices = pontos_r5r$name),
       
-      actionButton("btn_calcular", "Gerar Rota", class = "btn-primary", width = "100%"),
+      actionButton("btn_calcular", "Gerar Rota", class = "btn-primary", width = "100%", icon = icon("walking")),
       hr(),
       uiOutput("ui_feedback")
     ),
@@ -28,11 +44,16 @@ ui <- fluidPage(
   )
 )
 
-#server
-
 server <- function(input, output, session) {
   
-  dados_rota <- reactiveValues(rota_sf = NULL, distancia = NULL, tempo = NULL)
+  dados_rota <- reactiveValues(rota_sf = NULL, stats = NULL)
+  
+  observeEvent(input$btn_inverter, {
+    origem_atual <- input$origem
+    destino_atual <- input$destino
+    updateSelectizeInput(session, "origem", selected = destino_atual)
+    updateSelectizeInput(session, "destino", selected = origem_atual)
+  })
   
   observeEvent(c(input$origem, input$destino), {
     dados_rota$rota_sf <- NULL 
@@ -42,14 +63,14 @@ server <- function(input, output, session) {
     req(input$origem, input$destino)
     
     if(input$origem == input$destino) {
-      showNotification("Origem e Destino devem ser diferentes.", type = "warning")
+      showNotification("Origem e Destino são iguais.", type = "warning")
       return()
     }
     
     pt_origem <- pontos_r5r %>% filter(name == input$origem)
     pt_destino <- pontos_r5r %>% filter(name == input$destino)
     
-    id_notif <- showNotification("Calculando rota...", duration = NULL, closeButton = FALSE)
+    id_notif <- showNotification("Calculando melhor caminho...", duration = NULL, closeButton = FALSE)
     on.exit(removeNotification(id_notif), add = TRUE)
     
     tryCatch({
@@ -59,52 +80,84 @@ server <- function(input, output, session) {
         destinations = pt_destino,
         mode = "WALK",
         shortest_path = TRUE,
-        verbose = FALSE
+        verbose = FALSE,
+        drop_geometry = FALSE
       )
       
       if(nrow(rota) == 0) {
-        showNotification("Nenhuma rota encontrada.", type = "error")
+        showNotification("Nenhuma rota encontrada entre estes pontos.", type = "error")
         dados_rota$rota_sf <- NULL
       } else {
-        dados_rota$tempo <- round(rota$total_duration, 1)
-        dados_rota$distancia <- round(rota$distance, 0)
+        dados_rota$stats <- list(
+          tempo = round(rota$total_duration, 0),
+          distancia = round(rota$distance, 0),
+          subida = if("elevation_gain" %in% names(rota)) round(rota$elevation_gain, 0) else 0
+        )
         dados_rota$rota_sf <- st_as_sf(rota, crs = 4326)
       }
       
     }, error = function(e) {
-      showNotification(paste("Erro:", e$message), type = "error")
+      showNotification(paste("Erro no motor R5:", e$message), type = "error")
     })
   })
   
-
+  mapas_base <- c("Esri.WorldImagery", "CartoDB.Positron", "OpenStreetMap")
+  
   output$mapa <- renderLeaflet({
+    m_final <- NULL
+    
     if (is.null(dados_rota$rota_sf)) {
       pontos_sf <- st_as_sf(pontos_r5r, coords = c("lon", "lat"), crs = 4326)
-      m <- mapview(pontos_sf, zcol = NULL, color = "black", col.regions = "blue", 
-                   layer.name = "Locais UFBA", label = "name", map.types = "Esri.WorldImagery")
-      return(m@map)
+      m <- mapview(pontos_sf, zcol = NULL, color = "white", col.regions = "#007bff", 
+                   cex = 5, layer.name = "Locais UFBA", label = "name", 
+                   map.types = mapas_base)
+      
+      m_final <- m@map
+      
     } else {
-      # Mapa com rota
       pts_od <- bind_rows(
         pontos_r5r %>% filter(name == input$origem) %>% mutate(tipo = "Origem"),
         pontos_r5r %>% filter(name == input$destino) %>% mutate(tipo = "Destino")
       ) %>% st_as_sf(coords = c("lon", "lat"), crs = 4326)
       
-      m1 <- mapview(dados_rota$rota_sf, color = "yellow", lwd = 5, layer.name = "Rota", map.types = "Esri.WorldImagery")
-      m2 <- mapview(pts_od, zcol = "tipo", col.regions = c("green", "red"), layer.name = "O/D")
-      return((m1 + m2)@map)
+      m1 <- mapview(dados_rota$rota_sf, color = "yellow", lwd = 6, layer.name = "Rota Sugerida", map.types = mapas_base)
+      m2 <- mapview(pts_od, zcol = "tipo", col.regions = c("red", "green"), layer.name = "Início/Fim")
+      
+      m_final <- (m1 + m2)@map
     }
+    
+    m_final %>%
+      addControlGPS(
+        options = gpsOptions(
+          position = "topleft", 
+          activate = FALSE,
+          autoCenter = TRUE, 
+          maxZoom = 18, 
+          setView = TRUE
+        )
+      )
   })
   
   output$ui_feedback <- renderUI({
     req(dados_rota$rota_sf)
+    stats <- dados_rota$stats
+    
     tagList(
+      div(class = "info-box",
+          h4(icon("info-circle"), "Detalhes da Rota"),
+          p(strong("Tempo:"), stats$tempo, "min"),
+          p(strong("Distância:"), stats$distancia, "metros"),
+          if(stats$subida > 5) p(strong("Subida acumulada:"), stats$subida, "metros") else NULL
+      ),
+      br(),
       wellPanel(
-        h4("Validar Rota"),
-        p(strong("Tempo estimado:"), dados_rota$tempo, "min"),
-        radioButtons("validacao", "Rota ideal?", choices = c("Sim" = "sim", "Não" = "nao"), inline = TRUE),
-        conditionalPanel(condition = "input.validacao == 'nao'", textAreaInput("justificativa", "Sugira um caminho mais curto:", rows = 2)),
-        actionButton("btn_salvar", "Salvar", class = "btn-success")
+        h5("Essa rota faz sentido?"),
+        radioButtons("validacao", label = NULL, choices = c("Sim, perfeita" = "sim", "Não, ruim" = "nao"), inline = TRUE),
+        conditionalPanel(
+          condition = "input.validacao == 'nao'", 
+          textAreaInput("justificativa", "Por que não? Qual caminho você faria?", rows = 3, placeholder = "Ex: Esse portão vive fechado...")
+        ),
+        actionButton("btn_salvar", "Enviar Validação", class = "btn-success", width = "100%")
       )
     )
   })
@@ -113,21 +166,22 @@ server <- function(input, output, session) {
     shinyjs::disable("btn_salvar")
     
     novo_registro <- data.frame(
+      data_hora = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
       origem = input$origem,
       destino = input$destino,
-      tempo_r5r = dados_rota$tempo,
-      distancia_r5r = dados_rota$distancia,
-      rota_ideal = input$validacao,
-      sugestao = ifelse(input$validacao == "nao", input$justificativa, NA)
+      tempo_calc = dados_rota$stats$tempo,
+      distancia_calc = dados_rota$stats$distancia,
+      avaliacao = input$validacao,
+      comentario = ifelse(input$validacao == "nao", input$justificativa, NA)
     )
     
     tryCatch({
       sheet_append(ss = URL_PLANILHA, data = novo_registro)
-      showNotification("Salvo no Google Sheets!", type = "message")
-    }, error = function(e) {
-      showNotification("Erro ao salvar no Google Drive.", type = "error")
+      showNotification("Obrigado! Sua contribuição ajuda a melhorar a UFBA.", type = "message")
       shinyjs::enable("btn_salvar")
-      print(e)
+    }, error = function(e) {
+      showNotification("Erro ao salvar. Verifique a conexão.", type = "error")
+      shinyjs::enable("btn_salvar")
     })
   })
 }
