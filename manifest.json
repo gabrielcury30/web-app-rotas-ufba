@@ -7,7 +7,7 @@
     "primary_rmd": null,
     "primary_html": null,
     "primary_py": null,
-    "entrypoint": "rotas_App.R",
+    "entrypoint": "app.R",
     "content_category": "shiny"
   },
   "packages": {
@@ -24,8 +24,8 @@
     "here": "*"
   },
   "files": [
-    "rotas_App.R",
+    "app.R",
     "edif_ufba.gpkg",
-    "r5r_regiao/regiao.pbf"
+    "r5r_regiao/"
   ]
 }
