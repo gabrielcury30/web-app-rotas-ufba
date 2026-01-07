@@ -1,7 +1,5 @@
 {
   "version": 1,
-  "locale": "pt_BR",
-  "platform": "linux",
   "metadata": {
     "appmode": "shiny"
   },
