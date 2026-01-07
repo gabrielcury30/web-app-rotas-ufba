@@ -1,4 +1,4 @@
-options(java.parameters = "-Xmx1G")
+options(java.parameters = "-Xmx2G")
 
 library(shiny)
 library(shinyjs)
