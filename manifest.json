@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "locale": "pt_BR",
+  "platform": "4.2.0",
+  "metadata": {
+    "appmode": "shiny",
+    "primary_rmd": null,
+    "primary_html": null,
+    "primary_py": null,
+    "entrypoint": "rotas_App.R",
+    "content_category": "shiny"
+  },
+  "packages": {
+    "shiny": "*",
+    "shinyjs": "*",
+    "sf": "*",
+    "dplyr": "*",
+    "leaflet": "*",
+    "leaflet.extras": "*",
+    "r5r": "*",
+    "googlesheets4": "*",
+    "mapview": "*",
+    "data.table": "*",
+    "here": "*"
+  },
+  "files": [
+    "rotas_App.R",
+    "edif_ufba.gpkg",
+    "r5r_regiao/regiao.pbf"
+  ]
+}
