@@ -1,31 +1,9 @@
 {
   "version": 1,
   "locale": "pt_BR",
-  "platform": "4.2.0",
+  "platform": "linux",
   "metadata": {
-    "appmode": "shiny",
-    "primary_rmd": null,
-    "primary_html": null,
-    "primary_py": null,
-    "entrypoint": "app.R",
-    "content_category": "shiny"
+    "appmode": "shiny"
   },
-  "packages": {
-    "shiny": "*",
-    "shinyjs": "*",
-    "sf": "*",
-    "dplyr": "*",
-    "leaflet": "*",
-    "leaflet.extras": "*",
-    "r5r": "*",
-    "googlesheets4": "*",
-    "mapview": "*",
-    "data.table": "*",
-    "here": "*"
-  },
-  "files": [
-    "app.R",
-    "edif_ufba.gpkg",
-    "r5r_regiao/"
-  ]
+  "entrypoint": "app.R"
 }
