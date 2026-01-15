@@ -1,4 +1,3 @@
-options(java.parameters = "-Xmx1G")
 
 library(shiny)
 library(shinyjs)
@@ -8,11 +7,11 @@ library(mapview)
 library(leaflet.extras)
 library(sf)    
 library(dplyr) 
-library(r5r)
 library(sf)
 library(data.table)
 library(here)
 
+rotas_base <- readRDS("rotas_entre_pafs.rds")
 caminho_projeto <- getwd()
 caminho_arquivo <- file.path(caminho_projeto, "r5r_regiao")
 
@@ -29,7 +28,6 @@ pontos_r5r <- superficie %>%
   st_set_geometry(NULL) %>%
   select(id, name, lat, lon)
 
-r5r_network <- build_network(data_path = caminho_arquivo, verbose = FALSE)
 if(file.exists("rotaspeufba.json")) {
   gs4_auth(path = "rotaspeufba.json")
 }
@@ -97,15 +95,8 @@ server <- function(input, output, session) {
     on.exit(removeNotification(id_notif), add = TRUE)
     
     tryCatch({
-      rota <- detailed_itineraries(
-        r5r_network = r5r_network,
-        origins = pt_origem,
-        destinations = pt_destino,
-        mode = "WALK",
-        shortest_path = TRUE,
-        verbose = FALSE,
-        drop_geometry = FALSE
-      )
+      rota <- rotas_base %>% 
+        filter(nome_origem == input$origem, nome_destino == input$destino) 
       
       if(nrow(rota) == 0) {
         showNotification("Nenhuma rota encontrada entre estes pontos.", type = "error")
@@ -155,7 +146,7 @@ server <- function(input, output, session) {
           position = "topleft", 
           activate = FALSE,
           autoCenter = TRUE, 
-          maxZoom = 18, 
+          maxZoom = 20, 
           setView = TRUE
         )
       )
@@ -175,10 +166,10 @@ server <- function(input, output, session) {
       br(),
       wellPanel(
         h5("Essa rota faz sentido?"),
-        radioButtons("validacao", label = NULL, choices = c("Sim, perfeita" = "sim", "Não, ruim" = "nao"), inline = TRUE),
+        radioButtons("validacao", label = NULL, choices = c("Sim" = "sim", "Não" = "nao"), inline = TRUE),
         conditionalPanel(
           condition = "input.validacao == 'nao'", 
-          textAreaInput("justificativa", "Por que não? Qual caminho você faria?", rows = 3, placeholder = "Ex: Esse portão vive fechado...")
+          textAreaInput("justificativa", "Justifique ou sugira outra rota", rows = 3, placeholder = "Ex: Esse portão vive fechado...")
         ),
         actionButton("btn_salvar", "Enviar Validação", class = "btn-success", width = "100%")
       )
@@ -200,7 +191,7 @@ server <- function(input, output, session) {
     
     tryCatch({
       sheet_append(ss = URL_PLANILHA, data = novo_registro)
-      showNotification("Obrigado! Sua contribuição ajuda a melhorar a UFBA.", type = "message")
+      showNotification("Obrigado!", type = "message")
       shinyjs::enable("btn_salvar")
     }, error = function(e) {
       showNotification("Erro ao salvar. Verifique a conexão.", type = "error")
