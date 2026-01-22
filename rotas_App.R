@@ -1,4 +1,3 @@
-
 library(shiny)
 library(shinyjs)
 library(googlesheets4)
@@ -39,6 +38,7 @@ ui <- fluidPage(
   tags$head(tags$style(HTML("
     .info-box { background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 5px solid #007bff; }
     .warn-box { border-left-color: #ffc107; }
+    .success-box { background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; }
   "))),
   
   titlePanel("Rotas UFBA - Caminhabilidade"),
@@ -68,6 +68,8 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   dados_rota <- reactiveValues(rota_sf = NULL, stats = NULL)
+  # Variável para controlar se o feedback já foi enviado para a rota atual
+  feedback_enviado <- reactiveVal(FALSE)
   
   observeEvent(input$btn_inverter, {
     origem_atual <- input$origem
@@ -82,6 +84,9 @@ server <- function(input, output, session) {
   
   observeEvent(input$btn_calcular, {
     req(input$origem, input$destino)
+    
+    # Reseta o estado do feedback para permitir novo envio se a rota mudar
+    feedback_enviado(FALSE)
     
     if(input$origem == input$destino) {
       showNotification("Origem e Destino são iguais.", type = "warning")
@@ -111,7 +116,7 @@ server <- function(input, output, session) {
       }
       
     }, error = function(e) {
-      showNotification(paste("Erro no motor R5:", e$message), type = "error")
+      showNotification(paste("Erro ao recuperar rota:", e$message), type = "error")
     })
   })
   
@@ -156,15 +161,24 @@ server <- function(input, output, session) {
     req(dados_rota$rota_sf)
     stats <- dados_rota$stats
     
-    tagList(
-      div(class = "info-box",
-          h4(icon("info-circle"), "Detalhes da Rota"),
-          p(strong("Tempo:"), stats$tempo, "min"),
-          p(strong("Distância:"), stats$distancia, "metros"),
-          if(stats$subida > 5) p(strong("Subida acumulada:"), stats$subida, "metros") else NULL
-      ),
-      br(),
-      wellPanel(
+    # Bloco de estatísticas (sempre visível se houver rota)
+    stats_box <- div(class = "info-box",
+                     h4(icon("info-circle"), "Detalhes da Rota"),
+                     p(strong("Tempo:"), stats$tempo, "min"),
+                     p(strong("Distância:"), stats$distancia, "metros"),
+                     if(stats$subida > 5) p(strong("Subida acumulada:"), stats$subida, "metros") else NULL
+    )
+    
+    # Lógica de exibição condicional: Formulário OU Mensagem de Sucesso
+    if (feedback_enviado()) {
+      # Mensagem de agradecimento
+      interaction_area <- div(class = "success-box",
+                              h4("Obrigado pela sua participação!"),
+                              p("Se quiser testar uma nova rota, é só produzi-la alterando a origem e/ou destino acima.")
+      )
+    } else {
+      # Formulário de validação
+      interaction_area <- wellPanel(
         h5("Essa rota faz sentido?"),
         radioButtons("validacao", label = NULL, choices = c("Sim" = "sim", "Não" = "nao"), inline = TRUE),
         conditionalPanel(
@@ -173,7 +187,9 @@ server <- function(input, output, session) {
         ),
         actionButton("btn_salvar", "Enviar Validação", class = "btn-success", width = "100%")
       )
-    )
+    }
+    
+    tagList(stats_box, br(), interaction_area)
   })
   
   observeEvent(input$btn_salvar, {
@@ -192,10 +208,14 @@ server <- function(input, output, session) {
     tryCatch({
       sheet_append(ss = URL_PLANILHA, data = novo_registro)
       showNotification("Obrigado!", type = "message")
-      shinyjs::enable("btn_salvar")
+      
+      # Marca que o feedback foi enviado com sucesso, acionando a troca de UI
+      feedback_enviado(TRUE)
+      
+      # Não precisa dar enable no botão aqui porque o botão vai sumir da tela
     }, error = function(e) {
       showNotification("Erro ao salvar. Verifique a conexão.", type = "error")
-      shinyjs::enable("btn_salvar")
+      shinyjs::enable("btn_salvar") # Reabilita apenas se der erro, para tentar de novo
     })
   })
 }
