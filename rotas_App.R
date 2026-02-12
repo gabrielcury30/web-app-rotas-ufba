@@ -145,15 +145,57 @@ server <- function(input, output, session) {
       m_final <- m@map
       
     } else {
+      # Origem e destino
       pts_od <- bind_rows(
         pontos_r5r %>% filter(name == input$origem) %>% mutate(tipo = "Origem"),
         pontos_r5r %>% filter(name == input$destino) %>% mutate(tipo = "Destino")
-      ) %>% st_as_sf(coords = c("lon", "lat"), crs = 4326)
+      ) %>% 
+        st_as_sf(coords = c("lon", "lat"), crs = 4326)
       
-      m1 <- mapview(dados_rota$rota_sf, color = "yellow", lwd = 6, layer.name = "Rota Sugerida", map.types = mapas_base)
-      m2 <- mapview(pts_od, zcol = "tipo", col.regions = c("red", "green"), layer.name = "Início/Fim")
+      # Demais edificações
+      pts_outros <- pontos_r5r %>%
+        filter(!name %in% c(input$origem, input$destino)) %>%
+        st_as_sf(coords = c("lon", "lat"), crs = 4326)
       
-      m_final <- (m1 + m2)@map
+      # Camada da rota
+      m1 <- mapview(
+        dados_rota$rota_sf,
+        color = "yellow",
+        lwd = 6,
+        layer.name = "Rota Sugerida",
+        map.types = mapas_base
+      )
+      
+      # Camada origem/destino
+      m2 <- mapview(
+        pts_od,
+        zcol = "tipo",
+        col.regions = c("red", "green"),
+        cex = 8,
+        layer.name = "Origem/Destino"
+      )
+      
+      # Camada demais edificações (azul)
+      m3 <- mapview(
+        pts_outros,
+        color = "#007bff",
+        col.regions = "#007bff",
+        cex = 5,
+        layer.name = "Edificações",
+        label = "name"
+      )
+      
+      m_final <- (m1 + m2 + m3)@map
+      
+      bbox <- as.numeric(st_bbox(dados_rota$rota_sf))
+      
+      m_final <- m_final %>%
+        leaflet::fitBounds(
+          lng1 = bbox[1],
+          lat1 = bbox[2],
+          lng2 = bbox[3],
+          lat2 = bbox[4]
+        )
     }
     
     m_final
