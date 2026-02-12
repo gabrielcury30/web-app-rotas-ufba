@@ -3,7 +3,6 @@ library(shinyjs)
 library(googlesheets4)
 library(leaflet)
 library(mapview)
-library(leaflet.extras)
 library(sf)    
 library(dplyr) 
 library(sf)
@@ -15,7 +14,17 @@ caminho_projeto <- getwd()
 caminho_arquivo <- file.path(caminho_projeto, "r5r_regiao")
 
 dados_ufba <- st_read("edif_ufba.gpkg", quiet = TRUE)
-superficie <- st_point_on_surface(dados_ufba)
+# Garantir que está em 4326
+dados_ufba <- st_transform(dados_ufba, 4326)
+
+# Transformar para CRS projetado (metros)
+dados_ufba_proj <- st_transform(dados_ufba, 31984)
+
+# Calcular ponto na superfície em CRS projetado
+superficie_proj <- st_point_on_surface(dados_ufba_proj)
+
+# Voltar para 4326 para usar no Leaflet
+superficie <- st_transform(superficie_proj, 4326)
 
 pontos_r5r <- superficie %>%
   mutate(
@@ -147,16 +156,7 @@ server <- function(input, output, session) {
       m_final <- (m1 + m2)@map
     }
     
-    m_final %>%
-      addControlGPS(
-        options = gpsOptions(
-          position = "topleft", 
-          activate = FALSE,
-          autoCenter = TRUE, 
-          maxZoom = 20, 
-          setView = TRUE
-        )
-      )
+    m_final
   })
   
   output$ui_feedback <- renderUI({
