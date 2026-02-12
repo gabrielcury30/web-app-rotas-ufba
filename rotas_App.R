@@ -27,6 +27,8 @@ pontos_r5r <- superficie %>%
   st_set_geometry(NULL) %>%
   select(id, name, lat, lon)
 
+nomes_ordenados <- sort(pontos_r5r$name)
+
 if(file.exists("rotaspeufba.json")) {
   gs4_auth(path = "rotaspeufba.json")
 }
@@ -48,11 +50,11 @@ ui <- fluidPage(
       h4("Planejar Caminhada"),
       
       div(style="display: flex; align-items: flex-end;",
-          div(style="flex-grow: 1;", selectizeInput("origem", "Origem:", choices = pontos_r5r$name)),
+          div(style="flex-grow: 1;", selectizeInput("origem", "Origem:", choices = nomes_ordenados)),
           div(style="padding-bottom: 15px; padding-left: 5px;", 
               actionButton("btn_inverter", "", icon = icon("exchange-alt"), title = "Inverter sentidos"))
       ),
-      selectizeInput("destino", "Destino:", choices = pontos_r5r$name),
+      selectizeInput("destino", "Destino:", choices = nomes_ordenados),
       
       actionButton("btn_calcular", "Gerar Rota", class = "btn-primary", width = "100%", icon = icon("walking")),
       hr(),
